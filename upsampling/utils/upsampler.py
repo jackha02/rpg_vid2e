@@ -1,5 +1,4 @@
 import os
-import shutil
 
 import cv2
 import numpy as np
@@ -88,10 +87,16 @@ class Upsampler:
         return images, timestamps
 
     def _prepare_output_dir(self, src_dir: str, dest_dir: str):
-        # Copy directory structure.
-        def ignore_files(directory, files):
-            return [f for f in files if os.path.isfile(os.path.join(directory, f))]
-        shutil.copytree(src_dir, dest_dir, ignore=ignore_files)
+        # Recreate the directory structure only (no files). Deliberately
+        # avoids shutil.copytree: it calls copystat() on every directory it
+        # creates, which raises OSError/ENOTSUP on network mounts (e.g. SMB
+        # shares mounted via gvfs) that don't support setting permissions/
+        # timestamps.
+        os.makedirs(dest_dir, exist_ok=True)
+        for dirpath, dirnames, _ in os.walk(src_dir):
+            rel = os.path.relpath(dirpath, src_dir)
+            for dirname in dirnames:
+                os.makedirs(os.path.join(dest_dir, rel, dirname), exist_ok=True)
 
     @staticmethod
     def _write_img(img: np.ndarray, idx: int, imgs_dir: str):
